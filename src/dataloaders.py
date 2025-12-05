@@ -7,14 +7,14 @@ from torchvision import transforms
 class ImageDataset(Dataset):
     def __init__(self, root, transform=None):
         self.root = Path(root)
-        self.img_pth = list(self.root.rglob("*.jpg"))
+        self.img_pth = list(self.root.glob("*.jpg"))
         self.transform = transform
         
     def __len__(self):
         return len(self.img_pth)
     
     def __getitem__(self, index):
-        img = Image.open(self.img_pth[index].convert("RGB"))
+        img = Image.open(self.img_pth[index]).convert('RGB')
         if self.transform:
             img = self.transform(img)
         return img
@@ -22,6 +22,8 @@ class ImageDataset(Dataset):
 transform = Compose([
     transforms.CenterCrop(256),
     transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                         std=[0.229, 0.224, 0.225])
 ])
 
 def get_dataloaders(batch_size:int=16,
