@@ -75,13 +75,13 @@ class FeatureExtractor(Module):
         Returns:
             features : Dictionary of all the feature maps extracted.
         """
-        features = {}
+        features = []
         
         for i, layer in enumerate(self.vgg19):
             x = layer(x)
             
             if i in self.style_layers:
-                features[f'style{i}'] = x
+                features.append(x)
                 
             if i == max(self.style_layers):
                 break
@@ -97,29 +97,30 @@ class FeatureExtractor(Module):
         Returns:
             features : Dictionary of all the feature maps extracted.
         """
-        features = {}
+        features = 0.
         
         for i, layer in enumerate(self.vgg19):
             x = layer(x)
             
             if i == self.content_layer:
-                features['content21'] = x
+                features = x
                 break
                 
         return features
         
     def forward(self, x):
-        features = {}
+        features = []
         
         for i, layer in enumerate(self.vgg19):
             x = layer(x)
             
             if i in self.style_layers:
-                features[f'style{i}_1'] = x
+                features.append(x)
                 
             if i == self.content_layer:
-                features['content21'] = x
+                features.append(x)
                 
             if i == max(self.style_layers):
                 break
+            
         return features
