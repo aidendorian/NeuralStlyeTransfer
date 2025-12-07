@@ -47,7 +47,7 @@ with torch.no_grad():
     style_loss_module_list = [loss_style(features) for features in style_features_list]
     content_loss_module = loss_content(content_feature)
 
-prog_bar = tqdm(total=MAX_ITER, desc='Using LBFGS')
+lbfgs_prog_bar = tqdm(total=MAX_ITER, desc='Using LBFGS')
 
 def closure():
     optimizer.zero_grad()
@@ -63,13 +63,12 @@ def closure():
     total_loss = content_loss*ALPHA + style_loss*BETA
     # print(f'C_loss: {content_loss:.6f} | S_loss: {style_loss:.6f} | Total: {total_loss:.6}')
     total_loss.backward()
-    prog_bar.update(1)
-    prog_bar.set_postfix({'C_loss': f'{content_loss:.6f}', 'S_loss': f'{style_loss:.6f}', 'Total': f'{total_loss:.6f}'})
+    lbfgs_prog_bar.update(1)
+    lbfgs_prog_bar.set_postfix({'C_loss': f'{content_loss:.6f}', 'S_loss': f'{style_loss:.6f}', 'Total': f'{total_loss:.6f}'})
     return total_loss
 
 optimizer.step(closure=closure)
 visualize(generated, content_image, style_image, f'output/result_LBFGS_{BETA}_{MAX_ITER}_{LBFGS_LR}.png', True)
-
 
 generated = torch.clone(content_image)
 generated = generated.clamp(0, 1)
@@ -82,7 +81,7 @@ with torch.no_grad():
     style_loss_module_list = [loss_style(features) for features in style_features_list]
     content_loss_module = loss_content(content_feature)
 
-prog_bar = tqdm(total=MAX_ITER, desc='Using Adam')
+adam_prog_bar = tqdm(total=MAX_ITER, desc='Using Adam')
 
 for i in range(512):
     optimizer.zero_grad()
@@ -97,9 +96,9 @@ for i in range(512):
     content_loss = content_loss_module.content_loss
     total_loss = content_loss*ALPHA + style_loss*BETA
     # print(f'C_loss: {content_loss:.6f} | S_loss: {style_loss:.6f} | Total: {total_loss:.6}')
-    prog_bar.update(1)
-    prog_bar.set_postfix({'C_loss': f'{content_loss:.6f}', 'S_loss': f'{style_loss:.6f}', 'Total': f'{total_loss:.6f}'})
+    adam_prog_bar.update(1)
+    adam_prog_bar.set_postfix({'C_loss': f'{content_loss:.6f}', 'S_loss': f'{style_loss:.6f}', 'Total': f'{total_loss:.6f}'})
     total_loss.backward()
     optimizer.step()
     
-visualize(generated, content_image, style_image, f'output/result_{BETA}_{MAX_ITER}_{ADAM_LR}.png', True)
+visualize(generated, content_image, style_image, f'output/result_Adam_{BETA}_{MAX_ITER}_{ADAM_LR}.png', True)
