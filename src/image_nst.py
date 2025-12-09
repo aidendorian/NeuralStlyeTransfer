@@ -4,7 +4,7 @@ from visualization import visualize
 STYLE_LAYERS = ['relu1_1', 'relu3_3', 'relu4_3']
 STYLE_WEIGHTS = [2.0, 1.5, 1.0]
 CONTENT_LAYER = 'relu4_2'
-ALPHA = 1e2
+ALPHA = 1
 BETA = 1e6
 MAX_SIDE = 1280          
 CONTENT_PATH = 'data/content.jpg'
@@ -32,7 +32,8 @@ generated = run_pyramid(content_img=content_img,
                         style_weights=STYLE_WEIGHTS,
                         extractor=extractor,
                         pyramid_levels=PYRAMID_LEVELS,
-                        iters=ADAM_ITERS,
+                        adam_iters=ADAM_ITERS,
+                        adam_lr=ADAM_LR,
                         alpha=ALPHA,
                         beta=BETA)
 
@@ -50,7 +51,7 @@ generated = lbfgs_polish(content_img=content_img,
 if APPLY_HISTOGRAM_MATCHING:
     if HISTOGRAM_MATCHING_TARGET == 'content':
         target = content_img.squeeze(0).cpu().numpy().transpose(1, 2, 0)
-    else:
+    elif HISTOGRAM_MATCHING_TARGET == 'style':
         target = style_img.squeeze(0).cpu().numpy().transpose(1, 2, 0)
     generated = generated.squeeze(0).detach().cpu().numpy().transpose(1, 2, 0)
     generated = apply_histogram_matching(generated, target)

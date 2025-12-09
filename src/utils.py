@@ -11,6 +11,21 @@ from tqdm import tqdm
 from skimage.exposure import match_histograms
 
 def load_image(path, max_side=1280):
+    """
+    Load an image from the specified path and convert it to a normalized tensor.
+    The image is resized if its longest dimension exceeds max_side, maintaining
+    aspect ratio. The image is then converted to a tensor and normalized using
+    ImageNet normalization parameters.
+    Args:
+        path (str): File path to the image to load.
+        max_side (int, optional): Maximum length of the longest side of the image.
+            If the image's longest side exceeds this value, it will be resized
+            proportionally. Defaults to 1280.
+    Returns:
+        tuple: A tuple containing:
+            - tensor (torch.Tensor): The normalized image tensor with shape (1, 3, H, W).
+            - size (tuple): The original image dimensions as (width, height).
+    """
     img = Image.open(path).convert('RGB')
     w, h = img.size
     
@@ -29,6 +44,24 @@ def load_image(path, max_side=1280):
     return tensor, (img.width, img.height)
 
 def run_pyramid(content_img, style_img, style_layers, style_weights, extractor, pyramid_levels, adam_iters, adam_lr, alpha, beta):
+    """
+    Performs multi-scale neural style transfer using an image pyramid approach.
+
+    Args:
+        content_img (torch.Tensor): The content image tensor of shape (N, C, H, W).
+        style_img (torch.Tensor): The style image tensor of shape (N, C, H, W).
+        style_layers (list of str): List of layer names to use for style representation.
+        style_weights (list of float): List of weights for each style layer.
+        extractor (callable): Feature extractor that returns a dict with 'content' and 'style' features.
+        pyramid_levels (int): Number of pyramid levels (scales) to use.
+        adam_iters (int): Total number of Adam optimizer iterations.
+        adam_lr (float): Learning rate for the Adam optimizer.
+        alpha (float): Weight for the content loss.
+        beta (float): Weight for the style loss.
+
+    Returns:
+        torch.Tensor: The stylized image tensor of shape (N, C, H, W).
+    """
     img = content_img.clone().detach().requires_grad_(True)
     _, _, H, W = img.shape
 
@@ -74,6 +107,24 @@ def run_pyramid(content_img, style_img, style_layers, style_weights, extractor, 
     return img
 
 def lbfgs_polish(content_img, style_img, generated, extractor, style_layers, style_weights, lbfgs_lr, lbfgs_iters, alpha, beta):
+    """
+    Refines a generated image using the L-BFGS optimization algorithm for neural style transfer.
+
+    Args:
+        content_img (torch.Tensor): The content image tensor.
+        style_img (torch.Tensor): The style image tensor.
+        generated (torch.Tensor): The image tensor to be optimized (typically initialized as a copy of the content image).
+        extractor (callable): Feature extractor that returns a dict with 'content' and 'style' features.
+        style_layers (list of str): Names of layers to use for style representation.
+        style_weights (list of float): Weights for each style layer.
+        lbfgs_lr (float): Learning rate for the L-BFGS optimizer.
+        lbfgs_iters (int): Number of iterations for the L-BFGS optimizer.
+        alpha (float): Weight for the content loss.
+        beta (float): Weight for the style loss.
+
+    Returns:
+        torch.Tensor: The optimized image tensor after L-BFGS polishing.
+    """
     with torch.no_grad():
         content_target = extractor(content_img)['content']
         style_targets = extractor(style_img)['style']
@@ -103,6 +154,18 @@ def lbfgs_polish(content_img, style_img, generated, extractor, style_layers, sty
     return generated
 
 def gram_matrix(feature_map):
+    """
+    Computes the normalized Gram matrix for a given feature map tensor.
+
+    The Gram matrix is used to measure the correlations between the different feature channels.
+    It is commonly used in style transfer tasks to capture style information from images.
+
+    Args:
+        feature_map (torch.Tensor): A 4D tensor of shape (batch_size, channels, height, width).
+
+    Returns:
+        torch.Tensor: The normalized Gram matrix of shape (batch_size * channels, batch_size * channels).
+    """
     """Normalized Gram matrix"""
     a, b, c, d = feature_map.size()  # a=batch
     features = feature_map.view(a * b, c * d)
@@ -111,6 +174,20 @@ def gram_matrix(feature_map):
 
 
 class loss_content(nn.Module):
+    """
+    Content loss module for neural style transfer.
+
+    A PyTorch module that computes L1 loss between input features and target features.
+    The loss is calculated during the forward pass but the input is returned unchanged,
+    allowing this loss to be integrated into a computational graph.
+
+    Attributes:
+        target (torch.Tensor): The target feature tensor (detached from the computation graph).
+        loss (torch.Tensor): The computed L1 loss between input and target.
+
+    Args:
+        target (torch.Tensor): The target feature representation to match during style transfer.
+    """
     def __init__(self, target):
         super().__init__()
         self.target = target.detach()
@@ -121,6 +198,25 @@ class loss_content(nn.Module):
 
 
 class loss_style(nn.Module):
+    """
+    A PyTorch module that computes style loss using Gram matrix comparison.
+
+    This module calculates the L1 loss between the Gram matrix of input features
+    and a target Gram matrix, weighted by a specified factor. It's commonly used
+    in neural style transfer to measure style similarity between images.
+
+    Attributes:
+        weight (float): Scaling factor for the loss value. Default is 1.0.
+        target (torch.Tensor): Detached Gram matrix of the target style image.
+        loss (torch.Tensor): Computed style loss (set during forward pass).
+
+    Args:
+        target (torch.Tensor): Input tensor representing the target style image.
+        weight (float, optional): Multiplier for the loss. Default is 1.0.
+
+    Returns:
+        torch.Tensor: The input tensor x (unchanged), with loss stored in self.loss.
+    """
     def __init__(self, target, weight=1.0):
         super().__init__()
         self.weight = weight
@@ -133,6 +229,19 @@ class loss_style(nn.Module):
 
 
 class FeatureExtractor(nn.Module):
+    """
+    FeatureExtractor Module for Neural Style Transfer
+
+    A PyTorch module that extracts feature maps from specified layers of a pre-trained VGG19 network.
+    This is commonly used in neural style transfer to compute content and style losses.
+
+    Attributes:
+        vgg (nn.Module): Pre-trained VGG19 feature extractor (frozen, no gradient computation).
+        layer_map (dict): Maps layer names (e.g., 'relu1_1') to their indices in the VGG19 architecture.
+        content_idx (int): Index of the layer used for content feature extraction.
+        style_idxs (list): List of indices for layers used in style feature extraction.
+        max_idx (int): Maximum layer index to process (optimization to avoid unnecessary computation).
+    """
     def __init__(self, content_layer, style_layers):
         super().__init__()
         vgg = vgg19(weights=VGG19_Weights.DEFAULT).features.eval()
@@ -152,7 +261,6 @@ class FeatureExtractor(nn.Module):
         self.max_idx = max(self.content_idx, max(self.style_idxs))
 
     def forward(self, x):
-        """Now has forward() — this was the missing piece!"""
         content_feat = None
         style_feats = {layer: None for layer in self.style_idxs}
 
@@ -173,5 +281,15 @@ class FeatureExtractor(nn.Module):
         }
 
 def apply_histogram_matching(generated, target):
+        """
+        Apply histogram matching to align the color distribution of generated image to target image.
+        
+        Args:
+            generated: Input image (numpy array) with shape (height, width, channels) to be matched.
+            target: Reference image (numpy array) with shape (height, width, channels) whose histogram will be used as reference.
+        
+        Returns:
+            torch.Tensor: Histogram-matched image as a PyTorch tensor with shape (channels, height, width).
+        """
         matched = match_histograms(generated, target, channel_axis=2)
         return torch.from_numpy(matched).permute((2, 0, 1))
